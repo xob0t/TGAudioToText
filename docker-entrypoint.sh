@@ -1,5 +1,4 @@
 #!/bin/bash
-
 echo "Starting TGAudioToText..."
 echo "Punctuation enabled: ${TG_PUNCTUATION_ENABLED}"
 
@@ -16,10 +15,12 @@ trap cleanup SIGTERM SIGINT
 # Start punctuation server only if enabled
 if [ "${TG_PUNCTUATION_ENABLED}" = "true" ] || [ "${TG_PUNCTUATION_ENABLED}" = "True" ]; then
     echo "Starting punctuation server..."
-    if [ -f "./punctuation/punctuation-server.py" ]; then
-        python3 ./punctuation/punctuation-server.py &
+    if [ -f "/app/punctuation/punctuation-server.py" ]; then
+        cd /app/punctuation
+        python3 punctuation-server.py &
         PUNCT_PID=$!
         echo "Punctuation server started with PID: $PUNCT_PID"
+        cd /app/tgaudio
     else
         echo "Warning: Punctuation enabled but server script not found!"
     fi
@@ -29,7 +30,7 @@ fi
 
 # Start the main application
 echo "Starting TGAudioToText application..."
-./tgaudio/TGAudioToText &
+./TGAudioToText &
 MAIN_PID=$!
 echo "Main application started with PID: $MAIN_PID"
 
