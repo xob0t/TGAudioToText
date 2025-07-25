@@ -1,0 +1,40 @@
+services:
+  tgaudio2text:
+    build:
+      context: .
+      args:
+        PUNCTUATION_ENABLED: ${PUNCTUATION_ENABLED:-false}
+    container_name: tgaudio2text
+    restart: unless-stopped
+    environment:
+      # Required - Set these in your .env file
+      - TG_PHONE=${TG_PHONE}
+      - TG_API_ID=${TG_API_ID}
+      - TG_API_HASH=${TG_API_HASH}
+
+      # Optional - All have defaults in code
+      - TG_LOGIN_NAME=${TG_LOGIN_NAME}
+      - TG_PASSWORD=${TG_PASSWORD}
+      - TG_TITLE=${TG_TITLE}
+      - TG_MODEL_NAME=${TG_MODEL_NAME}
+      - TG_PUNCTUATION_ENABLED=${TG_PUNCTUATION_ENABLED}
+      - TG_PUNCTUATION_SERVER=${TG_PUNCTUATION_SERVER}
+      - TG_IN_PERSONAL=${TG_IN_PERSONAL}
+      - TG_OUT_PERSONAL=${TG_OUT_PERSONAL}
+      - TG_OUT_GROUP=${TG_OUT_GROUP}
+      - TG_BLACKLIST=${TG_BLACKLIST}
+      - TG_TEXT_TRYING=${TG_TEXT_TRYING}
+      - TG_TEXT_RECOGNIZED=${TG_TEXT_RECOGNIZED}
+      - TG_TEXT_FAILED=${TG_TEXT_FAILED}
+
+    volumes:
+      # Persist Telegram session
+      - ./WTelegram.session:/app/tgaudio/WTelegram.session
+      # Optional: Persist downloaded model
+      - ./models:/app/tgaudio/models
+      # Optional: Custom config file (if you prefer file over env vars)
+      - ./TGAudioToText.cfg:/app/tgaudio/TGAudioToText.cfg
+
+    # Only expose port if punctuation is enabled and you want external access
+    ports:
+      - "${PUNCTUATION_PORT:-8018}:8018"

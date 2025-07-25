@@ -13,6 +13,7 @@ using System.Reflection;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Net.Http;
+using System.IO.Compression;
 
 namespace TGInstaAudioToText
 {
@@ -42,11 +43,8 @@ namespace TGInstaAudioToText
 
         [ConfigDesc(Description = "Enable punctuation")]
         public static bool PunctuationEnabled = false;
-        //[ConfigDesc(Description = "Python venv for punctuation")]
-        //public static string PunctuationPuthonVenvPath = "";
         [ConfigDesc(Description = "Punctuation server")]
         public static string PunctuationServer = "http://127.0.0.1:8018";
-
 
         [ConfigDesc(Description = "Recognize inbound voice messages in personal chats")]
         public static bool InPersonal = true;
@@ -66,12 +64,30 @@ namespace TGInstaAudioToText
 
         [ConfigDesc(Description = "Text for: Bot did't recognized text")]
         public static string TextBotDidntRecognizedText = "Бот не смог не распознать текст";
-        //
 
         public static void Load(string FileName)
         {
             try
             {
+                // Load from environment variables first
+                string envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_TITLE"))) Title = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_MODEL_NAME"))) ModelName = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_PHONE"))) TelegramPhone = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_API_ID")) && int.TryParse(envValue, out int apiId)) TelegramApiId = apiId;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_API_HASH"))) TelegramApiHash = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_LOGIN_NAME"))) TelegramLoginName = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_PASSWORD"))) TelegramPassword = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_PUNCTUATION_ENABLED")) && bool.TryParse(envValue, out bool punctEnabled)) PunctuationEnabled = punctEnabled;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_PUNCTUATION_SERVER"))) PunctuationServer = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_IN_PERSONAL")) && bool.TryParse(envValue, out bool inPersonal)) InPersonal = inPersonal;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_OUT_PERSONAL")) && bool.TryParse(envValue, out bool outPersonal)) OutPersonal = outPersonal;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_OUT_GROUP")) && bool.TryParse(envValue, out bool outGroup)) OutGroup = outGroup;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_BLACKLIST"))) Blacklist = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_TEXT_TRYING"))) TextBotTryingRecognize = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_TEXT_RECOGNIZED"))) TextBotRecognizedText = envValue;
+                if (!string.IsNullOrEmpty(envValue = Environment.GetEnvironmentVariable("TG_TEXT_FAILED"))) TextBotDidntRecognizedText = envValue;
+
                 using TextReader reader = new StreamReader(new FileStream(FileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite));
                 string line = reader.ReadLine();
                 var members = typeof(Config).GetFields();
@@ -108,7 +124,6 @@ namespace TGInstaAudioToText
                     SB.AppendLine($"{member.Name} = {member.GetValue(null)}");
                     SB.AppendLine();
                 }
-
 
                 FileStream stream = (FileStream)((StreamReader)reader).BaseStream;
                 stream.SetLength(0);
@@ -408,6 +423,81 @@ namespace TGInstaAudioToText
             P.WaitForExit();
         }
 
+        // Added method for auto model download
+        static async Task<bool> EnsureModelExists()
+        {
+            try
+            {
+                Output.Write("Checking model... ", Output.TextDefault);
+                
+                if (string.IsNullOrEmpty(Config.ModelName))
+                {
+                    Config.ModelName = "vosk-model-small-ru-0.22";
+                    Output.WriteLine($"No model specified, using default: {Config.ModelName}", Output.TextInfo);
+                }
+
+                if (!Directory.Exists(Config.ModelName))
+                {
+                    Output.WriteLine($"Model '{Config.ModelName}' not found, downloading...", Output.TextWarning);
+                    
+                    string modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip";
+                    string zipFileName = Path.Combine(Sys.GetAppPath(), "model.zip");
+                    
+                    try
+                    {
+                        using (var httpClient = new HttpClient())
+                        {
+                            Output.Write("Downloading model... ", Output.TextDefault);
+                            
+                            using (var response = await httpClient.GetAsync(modelUrl, HttpCompletionOption.ResponseHeadersRead))
+                            {
+                                response.EnsureSuccessStatusCode();
+                                
+                                using (var fileStream = new FileStream(zipFileName, FileMode.Create, FileAccess.Write, FileShare.None))
+                                using (var httpStream = await response.Content.ReadAsStreamAsync())
+                                {
+                                    await httpStream.CopyToAsync(fileStream);
+                                }
+                            }
+                            
+                            Output.WriteLine("OK", Output.TextSuccess);
+                        }
+
+                        Output.Write("Extracting model... ", Output.TextDefault);
+                        
+                        ZipFile.ExtractToDirectory(zipFileName, Sys.GetAppPath());
+                        
+                        File.Delete(zipFileName);
+                        
+                        Output.WriteLine("OK", Output.TextSuccess);
+                        
+                        if (!Directory.Exists(Config.ModelName))
+                        {
+                            throw new Exception($"Model directory '{Config.ModelName}' still not found after extraction");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Output.WriteLine($"Failed to download model: {ex.Message}", Output.TextError);
+                        Output.WriteLine($"Please manually download from https://alphacephei.com/vosk/models and extract to '{Config.ModelName}' folder", Output.TextError);
+                        return false;
+                    }
+                }
+                else
+                {
+                    Output.WriteLine("OK", Output.TextSuccess);
+                }
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Output.WriteLine($"Error: {ex.Message}", Output.TextError);
+                return false;
+            }
+        }
+
+
         async static Task<bool> StartTelegram()
         {
             string tmpPath = Path.Combine(Sys.GetAppPath(), "tmp");
@@ -674,7 +764,7 @@ namespace TGInstaAudioToText
             return "sh";
         }
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Config.Load(Sys.GetConfigFileName());
 
@@ -726,20 +816,17 @@ namespace TGInstaAudioToText
                 return;
             }
             
+            // Ensure model exists (download if needed)
+            if (!await EnsureModelExists())
+            {
+                return;
+            }
+
             try
             {
                 Output.Write("Loading model... ", Output.TextDefault);
-                if (!Directory.Exists(Config.ModelName))
-                {
-                    Output.WriteLine($"Model '{Config.ModelName}' Not Found: Download model from https://alphacephei.com/vosk/models and put model's folder to application's folder", Output.TextError);
-                    return;
-                }
-                else
-                {
-                    model = new Model(Config.ModelName);
-                    Output.WriteLine("OK", Output.TextSuccess);
-                }
-                
+                model = new Model(Config.ModelName);
+                Output.WriteLine("OK", Output.TextSuccess);
             }
             catch (Exception ex)
             {
@@ -762,8 +849,6 @@ namespace TGInstaAudioToText
                 Thread.Sleep(1000);
                 //Console.ReadKey();
             }
-
-            
         }
     }
 }
