@@ -23,19 +23,18 @@ RUN if [ "$PUNCTUATION_ENABLED" = "true" ]; then \
 
 # Copy application
 COPY --from=build /app /app/tgaudio
-WORKDIR /app/tgaudio
 
-# Copy scripts
-WORKDIR /app
-COPY ./docker-entrypoint.sh /app/build/docker-entrypoint.sh
-RUN chmod +x /app/build/docker-entrypoint.sh
-
-WORKDIR /app/build
+# Copy entrypoint script to the same directory as the app
+COPY ./docker-entrypoint.sh /app/tgaudio/docker-entrypoint.sh
+RUN chmod +x /app/tgaudio/docker-entrypoint.sh
 
 # Copy punctuation files
 COPY ./punctuation /app/punctuation
 RUN if [ "$PUNCTUATION_ENABLED" = "true" ]; then \
     python3 ./punctuation/punctuation-server-setup.py; \
     fi
+
+# Set working directory to where the app and script are
+WORKDIR /app/tgaudio
 
 CMD ["./docker-entrypoint.sh"]
