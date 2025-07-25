@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 echo "Starting TGAudioToText..."
 echo "Punctuation enabled: ${TG_PUNCTUATION_ENABLED}"
 
