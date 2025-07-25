@@ -19,23 +19,23 @@ RUN if [ "$PUNCTUATION_ENABLED" = "true" ]; then \
     pip3 install git+https://huggingface.co/kontur-ai/sbert_punc_case_ru; \
     fi
 
-# Copy application
+# Copy application to /app/tgaudio (matching working structure)
 COPY --from=build /app /app/tgaudio
 
-# Copy punctuation files to the working directory
-COPY ./punctuation /app/tgaudio/punctuation
+# Set working directory to /app (NOT /app/tgaudio)
+WORKDIR /app
 
-# Copy entrypoint script and fix line endings + permissions
-COPY ./docker-entrypoint.sh /app/tgaudio/docker-entrypoint.sh
-RUN sed -i 's/\r$//' /app/tgaudio/docker-entrypoint.sh && \
-    chmod +x /app/tgaudio/docker-entrypoint.sh
+# Copy entrypoint script to /app/ (matching working structure)
+COPY ./docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && \
+    chmod +x /app/docker-entrypoint.sh
+
+# Copy punctuation files to /app/punctuation (matching working structure)
+COPY ./punctuation /app/punctuation
 
 # Run punctuation setup if enabled
 RUN if [ "$PUNCTUATION_ENABLED" = "true" ]; then \
-    cd /app/tgaudio && python3 ./punctuation/punctuation-server-setup.py; \
+    python3 ./punctuation/punctuation-server-setup.py; \
     fi
-
-# Set working directory to where the app and script are
-WORKDIR /app/tgaudio
 
 CMD ["./docker-entrypoint.sh"]
