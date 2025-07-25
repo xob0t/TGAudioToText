@@ -1,9 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:3.1-alpine as build
-
 WORKDIR /src
 COPY *.csproj ./
 RUN dotnet restore
-
 COPY . ./
 RUN dotnet build . -o /app
 
@@ -24,14 +22,17 @@ RUN if [ "$PUNCTUATION_ENABLED" = "true" ]; then \
 # Copy application
 COPY --from=build /app /app/tgaudio
 
-# Copy entrypoint script to the same directory as the app
-COPY ./docker-entrypoint.sh /app/tgaudio/docker-entrypoint.sh
-RUN chmod +x /app/tgaudio/docker-entrypoint.sh
+# Copy punctuation files to the working directory
+COPY ./punctuation /app/tgaudio/punctuation
 
-# Copy punctuation files
-COPY ./punctuation /app/punctuation
+# Copy entrypoint script and fix line endings + permissions
+COPY ./docker-entrypoint.sh /app/tgaudio/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/tgaudio/docker-entrypoint.sh && \
+    chmod +x /app/tgaudio/docker-entrypoint.sh
+
+# Run punctuation setup if enabled
 RUN if [ "$PUNCTUATION_ENABLED" = "true" ]; then \
-    python3 ./punctuation/punctuation-server-setup.py; \
+    cd /app/tgaudio && python3 ./punctuation/punctuation-server-setup.py; \
     fi
 
 # Set working directory to where the app and script are
