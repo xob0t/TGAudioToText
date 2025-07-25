@@ -29,8 +29,8 @@ services:
 
     volumes:
       # Persist Telegram session
-      - tgaudio/WTelegram.session:/app/tgaudio/WTelegram.session
+      - /tgaudio/WTelegram.session:/app/tgaudio/WTelegram.session
       # Optional: Persist downloaded model
-      - tgaudio/models:/app/tgaudio/models
+      - /tgaudio/models:/app/tgaudio/models
       # Optional: Custom config file (if you prefer file over env vars)
-      - tgaudio/TGAudioToText.cfg:/app/tgaudio/TGAudioToText.cfg
+      - /tgaudio/TGAudioToText.cfg:/app/tgaudio/TGAudioToText.cfg
