@@ -27,8 +27,10 @@ WORKDIR /app/tgaudio
 
 # Copy scripts
 WORKDIR /app
-COPY ./docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+COPY ./docker-entrypoint.sh /app/build/docker-entrypoint.sh
+RUN chmod +x /app/build/docker-entrypoint.sh
+
+WORKDIR /app/build
 
 # Copy punctuation files
 COPY ./punctuation /app/punctuation
