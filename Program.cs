@@ -436,15 +436,32 @@ namespace TGInstaAudioToText
                     Output.WriteLine($"No model specified, using default: {Config.ModelName}", Output.TextInfo);
                 }
 
-                if (!Directory.Exists(Config.ModelName))
+                string modelPath = Path.Combine(Sys.GetAppPath(), Config.ModelName);
+                
+                if (!Directory.Exists(modelPath))
                 {
                     Output.WriteLine($"Model '{Config.ModelName}' not found, downloading...", Output.TextWarning);
                     
                     string modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip";
                     string zipFileName = Path.Combine(Sys.GetAppPath(), "model.zip");
+                    string tempExtractPath = Path.Combine(Sys.GetAppPath(), "temp_model_extract");
                     
                     try
                     {
+                        // Clean up any existing files from previous failed attempts
+                        if (File.Exists(zipFileName))
+                        {
+                            File.Delete(zipFileName);
+                        }
+                        if (Directory.Exists(tempExtractPath))
+                        {
+                            Directory.Delete(tempExtractPath, true);
+                        }
+                        if (Directory.Exists(modelPath))
+                        {
+                            Directory.Delete(modelPath, true);
+                        }
+
                         using (var httpClient = new HttpClient())
                         {
                             Output.Write("Downloading model... ", Output.TextDefault);
@@ -465,20 +482,74 @@ namespace TGInstaAudioToText
 
                         Output.Write("Extracting model... ", Output.TextDefault);
                         
-                        ZipFile.ExtractToDirectory(zipFileName, Sys.GetAppPath());
+                        // Extract to temporary directory first
+                        Directory.CreateDirectory(tempExtractPath);
+                        ZipFile.ExtractToDirectory(zipFileName, tempExtractPath);
                         
+                        // Find the actual model directory inside the extracted files
+                        string[] extractedDirs = Directory.GetDirectories(tempExtractPath);
+                        string actualModelDir = null;
+                        
+                        // Look for directory that starts with "vosk-model" or contains the expected files
+                        foreach (string dir in extractedDirs)
+                        {
+                            string dirName = Path.GetFileName(dir);
+                            if (dirName.StartsWith("vosk-model") || 
+                                File.Exists(Path.Combine(dir, "conf", "model.conf")))
+                            {
+                                actualModelDir = dir;
+                                break;
+                            }
+                        }
+                        
+                        if (actualModelDir == null)
+                        {
+                            // If no model directory found, check if files are directly in temp folder
+                            if (File.Exists(Path.Combine(tempExtractPath, "conf", "model.conf")))
+                            {
+                                actualModelDir = tempExtractPath;
+                            }
+                            else
+                            {
+                                throw new Exception("No valid model directory found in the extracted ZIP file");
+                            }
+                        }
+                        
+                        // Move the model directory to the correct location
+                        if (actualModelDir == tempExtractPath)
+                        {
+                            Directory.Move(tempExtractPath, modelPath);
+                        }
+                        else
+                        {
+                            Directory.Move(actualModelDir, modelPath);
+                            Directory.Delete(tempExtractPath, true);
+                        }
+                        
+                        // Clean up the ZIP file
                         File.Delete(zipFileName);
                         
                         Output.WriteLine("OK", Output.TextSuccess);
                         
-                        if (!Directory.Exists(Config.ModelName))
+                        // Verify the model directory structure
+                        if (!File.Exists(Path.Combine(modelPath, "conf", "model.conf")))
                         {
-                            throw new Exception($"Model directory '{Config.ModelName}' still not found after extraction");
+                            throw new Exception($"Model directory '{Config.ModelName}' exists but doesn't contain expected files");
                         }
                     }
                     catch (Exception ex)
                     {
                         Output.WriteLine($"Failed to download model: {ex.Message}", Output.TextError);
+                        
+                        // Clean up on failure
+                        try
+                        {
+                            if (File.Exists(zipFileName)) File.Delete(zipFileName);
+                            if (Directory.Exists(tempExtractPath)) Directory.Delete(tempExtractPath, true);
+                            if (Directory.Exists(modelPath)) Directory.Delete(modelPath, true);
+                        }
+                        catch { }
+                        
                         Output.WriteLine($"Please manually download from https://alphacephei.com/vosk/models and extract to '{Config.ModelName}' folder", Output.TextError);
                         return false;
                     }
